@@ -54,6 +54,9 @@ function convertMarkdownToConfluence(markdown) {
   let codeContent = '';
   let inList = false;
   let listItems = [];
+  let inTable = false;
+  let tableHeaders = [];
+  let tableRows = [];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -82,6 +85,47 @@ function convertMarkdownToConfluence(markdown) {
       const level = headerMatch[1].length;
       const text = headerMatch[2];
       html += `<h${level}>${processInline(text)}</h${level}>\n`;
+      continue;
+    }
+
+    // Handle tables
+    if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
+      const cells = line.split('|').slice(1, -1).map(cell => cell.trim());
+
+      // Check if this is a separator line (e.g., |---|---|)
+      if (cells.every(cell => /^[-:]+$/.test(cell))) {
+        // This is the separator, skip it but mark that we're in a table
+        inTable = true;
+        continue;
+      }
+
+      if (!inTable) {
+        // First line is headers
+        tableHeaders = cells;
+        inTable = true;
+      } else {
+        // Subsequent lines are rows
+        tableRows.push(cells);
+      }
+      continue;
+    } else if (inTable && line.trim() === '') {
+      // End of table, render it
+      html += '<table><thead><tr>';
+      tableHeaders.forEach(header => {
+        html += `<th>${processInline(header)}</th>`;
+      });
+      html += '</tr></thead><tbody>';
+      tableRows.forEach(row => {
+        html += '<tr>';
+        row.forEach(cell => {
+          html += `<td>${processInline(cell)}</td>`;
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table>\n';
+      inTable = false;
+      tableHeaders = [];
+      tableRows = [];
       continue;
     }
 
@@ -127,6 +171,23 @@ function convertMarkdownToConfluence(markdown) {
   // Close any open list
   if (inList) {
     html += '<ul>\n' + listItems.map(item => `<li>${item}</li>`).join('\n') + '\n</ul>\n';
+  }
+
+  // Close any open table
+  if (inTable && tableHeaders.length > 0) {
+    html += '<table><thead><tr>';
+    tableHeaders.forEach(header => {
+      html += `<th>${processInline(header)}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+    tableRows.forEach(row => {
+      html += '<tr>';
+      row.forEach(cell => {
+        html += `<td>${processInline(cell)}</td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>\n';
   }
 
   return html;

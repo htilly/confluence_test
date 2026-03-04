@@ -143,9 +143,9 @@ The [example.md](example.md) file demonstrates supported markdown features. Note
 - Blockquotes
 - Horizontal rules
 - Paragraphs
+- Tables (converted to HTML `<table>` with `<thead>` and `<tbody>`)
 
 **Limited Support:**
-- Tables (basic HTML tables)
 - Images (must be publicly accessible URLs)
 - Task lists (converted to plain text with checkmarks)
 
@@ -171,11 +171,12 @@ The script converts markdown to Confluence HTML storage format compatible with t
 | Lists (- or 1.) | `<ul><li>` or `<ol><li>` |
 | Blockquotes (>) | `<blockquote><p>` |
 | Horizontal rules (---) | `<hr />` |
+| Tables (\| col \| col \|) | `<table><thead><tr><th>` |
 
 ### Known Limitations
 
 - **No dependencies**: Uses simple regex-based conversion for maximum compatibility
-- **Tables**: Basic HTML tables only (no alignment or advanced features)
+- **Tables**: Supports standard markdown tables with headers and rows; alignment syntax (`:---:`) is ignored
 - **Images**: Must be publicly accessible URLs; uploaded to Confluence manually
 - **GitHub-specific features**: Alerts, task lists, mentions, footnotes not converted
 - **Code syntax highlighting**: Basic `<pre><code>` blocks (no language-specific highlighting)
