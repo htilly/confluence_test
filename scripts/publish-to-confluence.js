@@ -33,47 +33,121 @@ function validateConfig() {
   }
 }
 
-// Convert markdown to Confluence wiki markup
+// Convert markdown to simple HTML for Confluence storage
 function convertMarkdownToConfluence(markdown) {
-  // For now, just pass through the markdown as-is
-  // Confluence wiki markup is similar to markdown
-  // We'll do basic conversions for common incompatibilities
+  let html = '';
+  const lines = markdown.split('\n');
+  let inCodeBlock = false;
+  let codeLanguage = '';
+  let codeContent = '';
+  let inList = false;
+  let listItems = [];
 
-  let wiki = markdown;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
 
-  // Convert GitHub alerts to Confluence info/warning panels
-  wiki = wiki.replace(/>\s*\[!NOTE\]\s*\n>\s*(.*?)(?=\n\n|\n>)/gs, (match, content) => {
-    return `{info}\n${content.replace(/^>\s*/gm, '')}\n{info}`;
-  });
+    // Handle code blocks
+    if (line.startsWith('```')) {
+      if (!inCodeBlock) {
+        inCodeBlock = true;
+        codeLanguage = line.substring(3) || 'none';
+        codeContent = '';
+      } else {
+        inCodeBlock = false;
+        html += `<pre><code>${escapeHtml(codeContent)}</code></pre>\n`;
+      }
+      continue;
+    }
 
-  wiki = wiki.replace(/>\s*\[!TIP\]\s*\n>\s*(.*?)(?=\n\n|\n>)/gs, (match, content) => {
-    return `{tip}\n${content.replace(/^>\s*/gm, '')}\n{tip}`;
-  });
+    if (inCodeBlock) {
+      codeContent += line + '\n';
+      continue;
+    }
 
-  wiki = wiki.replace(/>\s*\[!IMPORTANT\]\s*\n>\s*(.*?)(?=\n\n|\n>)/gs, (match, content) => {
-    return `{note}\n${content.replace(/^>\s*/gm, '')}\n{note}`;
-  });
+    // Handle headers
+    const headerMatch = line.match(/^(#{1,6})\s+(.+)$/);
+    if (headerMatch) {
+      const level = headerMatch[1].length;
+      const text = headerMatch[2];
+      html += `<h${level}>${processInline(text)}</h${level}>\n`;
+      continue;
+    }
 
-  wiki = wiki.replace(/>\s*\[!WARNING\]\s*\n>\s*(.*?)(?=\n\n|\n>)/gs, (match, content) => {
-    return `{warning}\n${content.replace(/^>\s*/gm, '')}\n{warning}`;
-  });
+    // Handle lists
+    if (line.match(/^[-*]\s+/) || line.match(/^\d+\.\s+/)) {
+      if (!inList) {
+        inList = true;
+        listItems = [];
+      }
+      const content = line.replace(/^[-*\d.]\s+/, '');
+      listItems.push(processInline(content));
+      continue;
+    } else if (inList && line.trim() === '') {
+      html += '<ul>\n' + listItems.map(item => `<li>${item}</li>`).join('\n') + '\n</ul>\n';
+      inList = false;
+      listItems = [];
+      continue;
+    }
 
-  wiki = wiki.replace(/>\s*\[!CAUTION\]\s*\n>\s*(.*?)(?=\n\n|\n>)/gs, (match, content) => {
-    return `{warning}\n${content.replace(/^>\s*/gm, '')}\n{warning}`;
-  });
+    // Handle horizontal rules
+    if (line.match(/^[-*_]{3,}$/)) {
+      html += '<hr />\n';
+      continue;
+    }
 
-  // Convert code blocks to Confluence code macro
-  wiki = wiki.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
-    const language = lang || 'none';
-    return `{code:language=${language}}\n${code}{code}`;
-  });
+    // Handle blockquotes
+    if (line.startsWith('>')) {
+      const content = line.substring(1).trim();
+      html += `<blockquote><p>${processInline(content)}</p></blockquote>\n`;
+      continue;
+    }
 
-  // Task lists: Convert [ ] and [x] to Confluence format
-  // Confluence doesn't have great support for task lists, but we can use checkmarks
-  wiki = wiki.replace(/- \[ \]/g, '- ☐');
-  wiki = wiki.replace(/- \[x\]/gi, '- ☑');
+    // Handle empty lines
+    if (line.trim() === '') {
+      html += '<p></p>\n';
+      continue;
+    }
 
-  return wiki;
+    // Regular paragraphs
+    html += `<p>${processInline(line)}</p>\n`;
+  }
+
+  // Close any open list
+  if (inList) {
+    html += '<ul>\n' + listItems.map(item => `<li>${item}</li>`).join('\n') + '\n</ul>\n';
+  }
+
+  return html;
+}
+
+function processInline(text) {
+  // Bold
+  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  text = text.replace(/__(.+?)__/g, '<strong>$1</strong>');
+
+  // Italic
+  text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  text = text.replace(/_(.+?)_/g, '<em>$1</em>');
+
+  // Strikethrough
+  text = text.replace(/~~(.+?)~~/g, '<s>$1</s>');
+
+  // Inline code
+  text = text.replace(/`(.+?)`/g, '<code>$1</code>');
+
+  // Links
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+
+  return text;
+}
+
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 // Make HTTPS request to Confluence API
@@ -129,9 +203,9 @@ async function updatePage(pageId, title, content) {
     title: title || existingPage.title,
     type: 'page',
     body: {
-      wiki: {
+      storage: {
         value: content,
-        representation: 'wiki'
+        representation: 'storage'
       }
     }
   };
@@ -163,9 +237,9 @@ async function createPage(spaceKey, parentId, title, content) {
       key: spaceKey
     },
     body: {
-      wiki: {
+      storage: {
         value: content,
-        representation: 'wiki'
+        representation: 'storage'
       }
     }
   };
