@@ -45,6 +45,115 @@ function validateConfig() {
   }
 }
 
+// Process blockquote lines and handle nesting
+function processBlockquote(lines) {
+  if (lines.length === 0) return '';
+
+  // Check if this is a GitHub alert (e.g., > [!NOTE])
+  let alertType = null;
+  let alertContent = [];
+
+  if (lines.length > 0) {
+    const firstLine = lines[0].substring(1).trim(); // Remove leading '>'
+    const alertMatch = firstLine.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]$/);
+
+    if (alertMatch) {
+      alertType = alertMatch[1];
+      // Collect the rest of the lines as alert content
+      for (let i = 1; i < lines.length; i++) {
+        let content = lines[i].substring(1); // Remove leading '>'
+        if (content.startsWith(' ')) {
+          content = content.substring(1);
+        }
+        if (content.trim() !== '') {
+          alertContent.push(content.trim());
+        }
+      }
+
+      // Map GitHub alert types to Confluence panel types
+      const panelMap = {
+        'NOTE': 'info',
+        'TIP': 'note',
+        'IMPORTANT': 'warning',
+        'WARNING': 'warning',
+        'CAUTION': 'error'
+      };
+
+      const panelType = panelMap[alertType] || 'info';
+      const panelTitle = alertType.charAt(0) + alertType.slice(1).toLowerCase();
+
+      // Create Confluence info panel (using ac:structured-macro for proper Confluence format)
+      let html = `<ac:structured-macro ac:name="${panelType}" ac:schema-version="1">`;
+      html += `<ac:parameter ac:name="title">${panelTitle}</ac:parameter>`;
+      html += '<ac:rich-text-body>';
+      html += '<p>' + processInline(alertContent.join(' ')) + '</p>';
+      html += '</ac:rich-text-body>';
+      html += '</ac:structured-macro>\n';
+
+      return html;
+    }
+  }
+
+  // Regular blockquote processing
+  let html = '<blockquote>';
+  let currentContent = [];
+  let nestedLines = [];
+
+  for (let line of lines) {
+    if (line.trim() === '>' || line.trim() === '') {
+      // Empty blockquote line
+      if (currentContent.length > 0) {
+        html += '<p>' + processInline(currentContent.join(' ')) + '</p>';
+        currentContent = [];
+      }
+      continue;
+    }
+
+    // Remove first '>' and optional space
+    let content = line.substring(1);
+    if (content.startsWith(' ')) {
+      content = content.substring(1);
+    }
+
+    // Check if this line has nested blockquote
+    if (content.startsWith('>')) {
+      // Flush current content
+      if (currentContent.length > 0) {
+        html += '<p>' + processInline(currentContent.join(' ')) + '</p>';
+        currentContent = [];
+      }
+      // Collect nested blockquote lines
+      nestedLines.push(content);
+    } else if (nestedLines.length > 0) {
+      // We were collecting nested lines, now process them
+      html += processBlockquote(nestedLines);
+      nestedLines = [];
+      // Add current line to content
+      if (content.trim() !== '') {
+        currentContent.push(content.trim());
+      }
+    } else {
+      // Regular content line
+      if (content.trim() !== '') {
+        currentContent.push(content.trim());
+      }
+    }
+  }
+
+  // Flush any remaining content
+  if (currentContent.length > 0) {
+    html += '<p>' + processInline(currentContent.join(' ')) + '</p>';
+  }
+
+  // Process any remaining nested blockquotes
+  if (nestedLines.length > 0) {
+    html += processBlockquote(nestedLines);
+  }
+
+  html += '</blockquote>\n';
+  return html;
+}
+
 // Convert markdown to simple HTML for Confluence storage
 function convertMarkdownToConfluence(markdown) {
   let html = '';
@@ -57,6 +166,8 @@ function convertMarkdownToConfluence(markdown) {
   let inTable = false;
   let tableHeaders = [];
   let tableRows = [];
+  let inBlockquote = false;
+  let blockquoteLines = [];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -151,37 +262,33 @@ function convertMarkdownToConfluence(markdown) {
       continue;
     }
 
-    // Handle blockquotes (including nested)
+    // Handle blockquotes (collect consecutive blockquote lines)
     if (line.startsWith('>')) {
-      // Count nesting level by counting leading '>' characters
-      let nestLevel = 0;
-      let contentStart = 0;
-      for (let i = 0; i < line.length; i++) {
-        if (line[i] === '>') {
-          nestLevel++;
-          contentStart = i + 1;
-        } else if (line[i] === ' ') {
-          contentStart = i + 1;
-          break;
-        } else {
-          break;
-        }
+      if (!inBlockquote) {
+        inBlockquote = true;
+        blockquoteLines = [];
       }
-
-      const content = line.substring(contentStart).trim();
-
-      // Open nested blockquotes
-      let blockquoteHTML = '';
-      for (let i = 0; i < nestLevel; i++) {
-        blockquoteHTML += '<blockquote>';
-      }
-      blockquoteHTML += `<p>${processInline(content)}</p>`;
-      // Close nested blockquotes
-      for (let i = 0; i < nestLevel; i++) {
-        blockquoteHTML += '</blockquote>';
-      }
-      html += blockquoteHTML + '\n';
+      blockquoteLines.push(line);
       continue;
+    } else if (inBlockquote && line.trim() === '') {
+      // Empty line might be inside blockquote, check next line
+      if (i + 1 < lines.length && lines[i + 1].startsWith('>')) {
+        blockquoteLines.push(line);
+        continue;
+      } else {
+        // End of blockquote block
+        html += processBlockquote(blockquoteLines);
+        inBlockquote = false;
+        blockquoteLines = [];
+        html += '<p></p>\n';
+        continue;
+      }
+    } else if (inBlockquote) {
+      // Non-empty, non-blockquote line ends the blockquote
+      html += processBlockquote(blockquoteLines);
+      inBlockquote = false;
+      blockquoteLines = [];
+      // Process this line normally (fall through)
     }
 
     // Handle empty lines
@@ -197,6 +304,11 @@ function convertMarkdownToConfluence(markdown) {
   // Close any open list
   if (inList) {
     html += '<ul>\n' + listItems.map(item => `<li>${item}</li>`).join('\n') + '\n</ul>\n';
+  }
+
+  // Close any open blockquote
+  if (inBlockquote && blockquoteLines.length > 0) {
+    html += processBlockquote(blockquoteLines);
   }
 
   // Close any open table
