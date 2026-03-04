@@ -12,7 +12,7 @@ on:
         description: 'Confluence space key'
         required: true
         type: string
-        default: 'h_tilly'
+        default: 'GitHubMark'
       page_id:
         description: 'Page ID (for updating existing page - leave empty if creating new)'
         required: false
@@ -21,7 +21,7 @@ on:
         description: 'Parent page ID (for creating new page)'
         required: false
         type: string
-        default: '29196289'
+        default: '29491201'
       page_title:
         description: 'Page title (required when creating new page)'
         required: false
