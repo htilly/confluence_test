@@ -151,10 +151,36 @@ function convertMarkdownToConfluence(markdown) {
       continue;
     }
 
-    // Handle blockquotes
+    // Handle blockquotes (including nested)
     if (line.startsWith('>')) {
-      const content = line.substring(1).trim();
-      html += `<blockquote><p>${processInline(content)}</p></blockquote>\n`;
+      // Count nesting level by counting leading '>' characters
+      let nestLevel = 0;
+      let contentStart = 0;
+      for (let i = 0; i < line.length; i++) {
+        if (line[i] === '>') {
+          nestLevel++;
+          contentStart = i + 1;
+        } else if (line[i] === ' ') {
+          contentStart = i + 1;
+          break;
+        } else {
+          break;
+        }
+      }
+
+      const content = line.substring(contentStart).trim();
+
+      // Open nested blockquotes
+      let blockquoteHTML = '';
+      for (let i = 0; i < nestLevel; i++) {
+        blockquoteHTML += '<blockquote>';
+      }
+      blockquoteHTML += `<p>${processInline(content)}</p>`;
+      // Close nested blockquotes
+      for (let i = 0; i < nestLevel; i++) {
+        blockquoteHTML += '</blockquote>';
+      }
+      html += blockquoteHTML + '\n';
       continue;
     }
 
