@@ -4,25 +4,29 @@ on:
   workflow_dispatch:
     inputs:
       confluence_url:
-        description: 'https://htilly.atlassian.net/wiki'
+        description: 'Confluence base URL'
         required: true
         type: string
+        default: 'https://htilly.atlassian.net/wiki'
       space_key:
-        description: 'h_tilly'
+        description: 'Confluence space key'
         required: true
         type: string
+        default: 'h_tilly'
       page_id:
         description: 'Page ID (for updating existing page - leave empty if creating new)'
         required: false
         type: string
       parent_page_id:
-        description: '29196289'
+        description: 'Parent page ID (for creating new page)'
         required: false
         type: string
+        default: '29196289'
       page_title:
-        description: 'Test Page'
+        description: 'Page title (required when creating new page)'
         required: false
         type: string
+        default: 'Test Page'
       markdown_file:
         description: 'Path to markdown file to publish'
         required: false
