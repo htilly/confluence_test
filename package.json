@@ -1,0 +1,19 @@
+{
+  "name": "confluence-publisher",
+  "version": "1.0.0",
+  "description": "Publish GitHub markdown to Confluence",
+  "main": "scripts/publish-to-confluence.js",
+  "scripts": {
+    "publish": "node scripts/publish-to-confluence.js"
+  },
+  "keywords": [
+    "confluence",
+    "markdown",
+    "github-actions"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "marked": "^12.0.0"
+  }
+}

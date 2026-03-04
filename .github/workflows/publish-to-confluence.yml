@@ -1,0 +1,111 @@
+name: Publish to Confluence
+
+on:
+  workflow_dispatch:
+    inputs:
+      confluence_url:
+        description: 'Confluence base URL (e.g., https://yourcompany.atlassian.net/wiki)'
+        required: true
+        type: string
+      space_key:
+        description: 'Confluence space key (e.g., TEAM)'
+        required: true
+        type: string
+      page_id:
+        description: 'Page ID (for updating existing page - leave empty if creating new)'
+        required: false
+        type: string
+      parent_page_id:
+        description: 'Parent page ID (for creating new page - leave empty if updating)'
+        required: false
+        type: string
+      page_title:
+        description: 'Page title (required when creating new page)'
+        required: false
+        type: string
+      markdown_file:
+        description: 'Path to markdown file to publish'
+        required: false
+        default: 'example.md'
+        type: string
+
+jobs:
+  publish:
+    name: Publish Markdown to Confluence
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate inputs
+        run: |
+          if [ -z "${{ inputs.page_id }}" ] && [ -z "${{ inputs.parent_page_id }}" ]; then
+            echo "❌ Error: Must provide either page_id (update mode) or parent_page_id (create mode)"
+            exit 1
+          fi
+
+          if [ -z "${{ inputs.page_id }}" ] && [ -z "${{ inputs.page_title }}" ]; then
+            echo "❌ Error: page_title is required when creating a new page"
+            exit 1
+          fi
+
+          if [ -n "${{ inputs.page_id }}" ]; then
+            echo "ℹ️  Mode: UPDATE existing page"
+            echo "   Page ID: ${{ inputs.page_id }}"
+          else
+            echo "ℹ️  Mode: CREATE new page"
+            echo "   Parent Page ID: ${{ inputs.parent_page_id }}"
+            echo "   Page Title: ${{ inputs.page_title }}"
+          fi
+
+      - name: Publish to Confluence
+        env:
+          CONFLUENCE_URL: ${{ inputs.confluence_url }}
+          CONFLUENCE_EMAIL: ${{ secrets.CONFLUENCE_EMAIL }}
+          CONFLUENCE_API_TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
+          SPACE_KEY: ${{ inputs.space_key }}
+          PAGE_ID: ${{ inputs.page_id }}
+          PARENT_PAGE_ID: ${{ inputs.parent_page_id }}
+          PAGE_TITLE: ${{ inputs.page_title }}
+          MARKDOWN_FILE: ${{ inputs.markdown_file }}
+        run: node scripts/publish-to-confluence.js
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "### ✅ Publishing Successful! 🎉" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Confluence URL:** ${{ inputs.confluence_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Space Key:** ${{ inputs.space_key }}" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ inputs.page_id }}" ]; then
+            echo "**Page ID:** ${{ inputs.page_id }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Mode:** Updated existing page" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Parent Page ID:** ${{ inputs.parent_page_id }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Page Title:** ${{ inputs.page_title }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Mode:** Created new page" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "**Markdown File:** ${{ inputs.markdown_file }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Error Summary
+        if: failure()
+        run: |
+          echo "### ❌ Publishing Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Check the logs above for error details." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Common issues:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Verify CONFLUENCE_EMAIL and CONFLUENCE_API_TOKEN secrets are set correctly" >> $GITHUB_STEP_SUMMARY
+          echo "- Check that the page ID or parent page ID exists" >> $GITHUB_STEP_SUMMARY
+          echo "- Ensure you have permissions to create/edit pages in the space" >> $GITHUB_STEP_SUMMARY
+          echo "- Verify the Confluence URL is correct (include /wiki for Cloud)" >> $GITHUB_STEP_SUMMARY
