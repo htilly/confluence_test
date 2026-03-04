@@ -2,7 +2,6 @@
 
 const fs = require('fs');
 const https = require('https');
-const { marked } = require('marked');
 
 // Environment variables from GitHub Actions
 const CONFLUENCE_URL = process.env.CONFLUENCE_URL;
@@ -34,137 +33,47 @@ function validateConfig() {
   }
 }
 
-// Custom renderer for Confluence storage format
-class ConfluenceRenderer extends marked.Renderer {
-  heading(text, level) {
-    return `<h${level}>${text}</h${level}>`;
-  }
-
-  paragraph(text) {
-    return `<p>${text}</p>`;
-  }
-
-  strong(text) {
-    return `<strong>${text}</strong>`;
-  }
-
-  em(text) {
-    return `<em>${text}</em>`;
-  }
-
-  del(text) {
-    return `<s>${text}</s>`;
-  }
-
-  codespan(code) {
-    return `<code>${this.escapeHtml(code)}</code>`;
-  }
-
-  code(code, language) {
-    language = language || 'none';
-    return `<ac:structured-macro ac:name="code"><ac:parameter ac:name="language">${language}</ac:parameter><ac:plain-text-body><![CDATA[${code}]]></ac:plain-text-body></ac:structured-macro>`;
-  }
-
-  blockquote(quote) {
-    // Handle GitHub alerts
-    const alertMatch = quote.match(/<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]([\s\S]*?)<\/p>/);
-    if (alertMatch) {
-      const [, type, content] = alertMatch;
-      const macroType = {
-        'NOTE': 'info',
-        'TIP': 'tip',
-        'IMPORTANT': 'note',
-        'WARNING': 'warning',
-        'CAUTION': 'warning'
-      }[type] || 'info';
-
-      return `<ac:structured-macro ac:name="${macroType}"><ac:rich-text-body>${content.trim()}</ac:rich-text-body></ac:structured-macro>`;
-    }
-    return `<blockquote>${quote}</blockquote>`;
-  }
-
-  list(body, ordered, start) {
-    const type = ordered ? 'ol' : 'ul';
-    return `<${type}>${body}</${type}>`;
-  }
-
-  listitem(text, task, checked) {
-    if (task) {
-      const checkbox = checked
-        ? '<ac:task><ac:task-status>complete</ac:task-status><ac:task-body>'
-        : '<ac:task><ac:task-status>incomplete</ac:task-status><ac:task-body>';
-      return `<li>${checkbox}${text}</ac:task-body></ac:task></li>`;
-    }
-    return `<li>${text}</li>`;
-  }
-
-  link(href, title, text) {
-    const titleAttr = title ? ` title="${this.escapeHtml(title)}"` : '';
-    return `<a href="${this.escapeHtml(href)}"${titleAttr}>${text}</a>`;
-  }
-
-  image(href, title, text) {
-    return `<ac:image><ri:url ri:value="${this.escapeHtml(href)}" /></ac:image>`;
-  }
-
-  hr() {
-    return '<hr />';
-  }
-
-  table(header, body) {
-    return `<table><thead>${header}</thead><tbody>${body}</tbody></table>`;
-  }
-
-  tablerow(content) {
-    return `<tr>${content}</tr>`;
-  }
-
-  tablecell(content, flags) {
-    const tag = flags.header ? 'th' : 'td';
-    return `<${tag}>${content}</${tag}>`;
-  }
-
-  br() {
-    return '<br />';
-  }
-
-  escapeHtml(text) {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-}
-
-// Convert markdown to Confluence storage format
+// Convert markdown to Confluence wiki markup
 function convertMarkdownToConfluence(markdown) {
-  marked.setOptions({
-    renderer: new ConfluenceRenderer(),
-    gfm: true,
-    breaks: false,
-    pedantic: false,
-    headerIds: false,
-    mangle: false
+  // For now, just pass through the markdown as-is
+  // Confluence wiki markup is similar to markdown
+  // We'll do basic conversions for common incompatibilities
+
+  let wiki = markdown;
+
+  // Convert GitHub alerts to Confluence info/warning panels
+  wiki = wiki.replace(/>\s*\[!NOTE\]\s*\n>\s*(.*?)(?=\n\n|\n>)/gs, (match, content) => {
+    return `{info}\n${content.replace(/^>\s*/gm, '')}\n{info}`;
   });
 
-  let html = marked.parse(markdown);
-
-  // Post-processing for emoji support
-  html = html.replace(/:([a-z_]+):/g, (match, emoji) => {
-    const emojiMap = {
-      'smile': '😀', 'rocket': '🚀', 'thumbsup': '👍', 'heart': '❤️',
-      'fire': '🔥', 'tada': '🎉', '100': '💯', 'eyes': '👀',
-      'sparkles': '✨', 'zap': '⚡'
-    };
-    return emojiMap[emoji] || match;
+  wiki = wiki.replace(/>\s*\[!TIP\]\s*\n>\s*(.*?)(?=\n\n|\n>)/gs, (match, content) => {
+    return `{tip}\n${content.replace(/^>\s*/gm, '')}\n{tip}`;
   });
 
-  // Handle footnotes (simplified - Confluence doesn't have native support)
-  html = html.replace(/\[\^(\w+)\]/g, '<sup>[$1]</sup>');
+  wiki = wiki.replace(/>\s*\[!IMPORTANT\]\s*\n>\s*(.*?)(?=\n\n|\n>)/gs, (match, content) => {
+    return `{note}\n${content.replace(/^>\s*/gm, '')}\n{note}`;
+  });
 
-  return html;
+  wiki = wiki.replace(/>\s*\[!WARNING\]\s*\n>\s*(.*?)(?=\n\n|\n>)/gs, (match, content) => {
+    return `{warning}\n${content.replace(/^>\s*/gm, '')}\n{warning}`;
+  });
+
+  wiki = wiki.replace(/>\s*\[!CAUTION\]\s*\n>\s*(.*?)(?=\n\n|\n>)/gs, (match, content) => {
+    return `{warning}\n${content.replace(/^>\s*/gm, '')}\n{warning}`;
+  });
+
+  // Convert code blocks to Confluence code macro
+  wiki = wiki.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+    const language = lang || 'none';
+    return `{code:language=${language}}\n${code}{code}`;
+  });
+
+  // Task lists: Convert [ ] and [x] to Confluence format
+  // Confluence doesn't have great support for task lists, but we can use checkmarks
+  wiki = wiki.replace(/- \[ \]/g, '- ☐');
+  wiki = wiki.replace(/- \[x\]/gi, '- ☑');
+
+  return wiki;
 }
 
 // Make HTTPS request to Confluence API
@@ -220,9 +129,9 @@ async function updatePage(pageId, title, content) {
     title: title || existingPage.title,
     type: 'page',
     body: {
-      storage: {
+      wiki: {
         value: content,
-        representation: 'storage'
+        representation: 'wiki'
       }
     }
   };
@@ -254,9 +163,9 @@ async function createPage(spaceKey, parentId, title, content) {
       key: spaceKey
     },
     body: {
-      storage: {
+      wiki: {
         value: content,
-        representation: 'storage'
+        representation: 'wiki'
       }
     }
   };
