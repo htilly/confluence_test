@@ -273,8 +273,22 @@ function convertMarkdownToConfluence(markdown) {
     } else if (inBlockquote && line.trim() === '') {
       // Empty line might be inside blockquote, check next line
       if (i + 1 < lines.length && lines[i + 1].startsWith('>')) {
-        blockquoteLines.push(line);
-        continue;
+        // Check if next line is a new alert - if so, end current blockquote
+        const nextLineContent = lines[i + 1].substring(1).trim();
+        const isNewAlert = nextLineContent.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]$/);
+
+        if (isNewAlert) {
+          // End current blockquote and start fresh for the new alert
+          html += processBlockquote(blockquoteLines);
+          inBlockquote = false;
+          blockquoteLines = [];
+          html += '<p></p>\n';
+          continue;
+        } else {
+          // Continue same blockquote
+          blockquoteLines.push(line);
+          continue;
+        }
       } else {
         // End of blockquote block
         html += processBlockquote(blockquoteLines);
