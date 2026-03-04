@@ -17,11 +17,11 @@ on:
         description: 'Page ID (for updating existing page - leave empty if creating new)'
         required: false
         type: string
+        default: '29491201'
       parent_page_id:
         description: 'Parent page ID (for creating new page)'
         required: false
         type: string
-        default: '29491201'
       page_title:
         description: 'Page title (required when creating new page)'
         required: false
