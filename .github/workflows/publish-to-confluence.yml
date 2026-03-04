@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       confluence_url:
-        description: 'Confluence base URL (e.g., https://yourcompany.atlassian.net/wiki)'
+        description: 'https://htilly.atlassian.net/wiki'
         required: true
         type: string
       space_key:
-        description: 'Confluence space key (e.g., TEAM)'
+        description: 'h_tilly'
         required: true
         type: string
       page_id:
@@ -16,11 +16,11 @@ on:
         required: false
         type: string
       parent_page_id:
-        description: 'Parent page ID (for creating new page - leave empty if updating)'
+        description: '29196289'
         required: false
         type: string
       page_title:
-        description: 'Page title (required when creating new page)'
+        description: 'Test Page'
         required: false
         type: string
       markdown_file:
