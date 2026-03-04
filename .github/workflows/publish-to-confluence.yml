@@ -23,10 +23,9 @@ on:
         required: false
         type: string
       page_title:
-        description: 'Page title (required when creating new page)'
+        description: 'Page title (leave empty to keep existing title when updating)'
         required: false
         type: string
-        default: 'Test Page'
       markdown_file:
         description: 'Path to markdown file to publish'
         required: false
