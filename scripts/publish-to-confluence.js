@@ -46,7 +46,7 @@ function validateConfig() {
 }
 
 // Process blockquote lines and handle nesting
-function processBlockquote(lines) {
+function processBlockquote(lines, footnotes = {}) {
   if (lines.length === 0) return '';
 
   // Check if this is a GitHub alert (e.g., > [!NOTE])
@@ -86,7 +86,7 @@ function processBlockquote(lines) {
       let html = `<ac:structured-macro ac:name="${panelType}" ac:schema-version="1">`;
       html += `<ac:parameter ac:name="title">${panelTitle}</ac:parameter>`;
       html += '<ac:rich-text-body>';
-      html += '<p>' + processInline(alertContent.join(' ')) + '</p>';
+      html += '<p>' + processInline(alertContent.join(' '), footnotes) + '</p>';
       html += '</ac:rich-text-body>';
       html += '</ac:structured-macro>\n';
 
@@ -103,7 +103,7 @@ function processBlockquote(lines) {
     if (line.trim() === '>' || line.trim() === '') {
       // Empty blockquote line
       if (currentContent.length > 0) {
-        html += '<p>' + processInline(currentContent.join(' ')) + '</p>';
+        html += '<p>' + processInline(currentContent.join(' '), footnotes) + '</p>';
         currentContent = [];
       }
       continue;
@@ -119,14 +119,14 @@ function processBlockquote(lines) {
     if (content.startsWith('>')) {
       // Flush current content
       if (currentContent.length > 0) {
-        html += '<p>' + processInline(currentContent.join(' ')) + '</p>';
+        html += '<p>' + processInline(currentContent.join(' '), footnotes) + '</p>';
         currentContent = [];
       }
       // Collect nested blockquote lines
       nestedLines.push(content);
     } else if (nestedLines.length > 0) {
       // We were collecting nested lines, now process them
-      html += processBlockquote(nestedLines);
+      html += processBlockquote(nestedLines, footnotes);
       nestedLines = [];
       // Add current line to content
       if (content.trim() !== '') {
@@ -142,12 +142,12 @@ function processBlockquote(lines) {
 
   // Flush any remaining content
   if (currentContent.length > 0) {
-    html += '<p>' + processInline(currentContent.join(' ')) + '</p>';
+    html += '<p>' + processInline(currentContent.join(' '), footnotes) + '</p>';
   }
 
   // Process any remaining nested blockquotes
   if (nestedLines.length > 0) {
-    html += processBlockquote(nestedLines);
+    html += processBlockquote(nestedLines, footnotes);
   }
 
   html += '</blockquote>\n';
@@ -168,6 +168,8 @@ function convertMarkdownToConfluence(markdown) {
   let tableRows = [];
   let inBlockquote = false;
   let blockquoteLines = [];
+  let footnotes = {}; // Store footnote definitions
+  let footnoteCounter = 0;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -195,7 +197,7 @@ function convertMarkdownToConfluence(markdown) {
     if (headerMatch) {
       const level = headerMatch[1].length;
       const text = headerMatch[2];
-      html += `<h${level}>${processInline(text)}</h${level}>\n`;
+      html += `<h${level}>${processInline(text, footnotes)}</h${level}>\n`;
       continue;
     }
 
@@ -223,13 +225,13 @@ function convertMarkdownToConfluence(markdown) {
       // End of table, render it
       html += '<table><thead><tr>';
       tableHeaders.forEach(header => {
-        html += `<th>${processInline(header)}</th>`;
+        html += `<th>${processInline(header, footnotes)}</th>`;
       });
       html += '</tr></thead><tbody>';
       tableRows.forEach(row => {
         html += '<tr>';
         row.forEach(cell => {
-          html += `<td>${processInline(cell)}</td>`;
+          html += `<td>${processInline(cell, footnotes)}</td>`;
         });
         html += '</tr>';
       });
@@ -247,7 +249,7 @@ function convertMarkdownToConfluence(markdown) {
         listItems = [];
       }
       const content = line.replace(/^[-*\d.]\s+/, '');
-      listItems.push(processInline(content));
+      listItems.push(processInline(content, footnotes));
       continue;
     } else if (inList && line.trim() === '') {
       html += '<ul>\n' + listItems.map(item => `<li>${item}</li>`).join('\n') + '\n</ul>\n';
@@ -260,6 +262,18 @@ function convertMarkdownToConfluence(markdown) {
     if (line.match(/^[-*_]{3,}$/)) {
       html += '<hr />\n';
       continue;
+    }
+
+    // Handle footnote definitions (e.g., [^1]: Definition text)
+    const footnoteDefMatch = line.match(/^\[\^([^\]]+)\]:\s*(.+)$/);
+    if (footnoteDefMatch) {
+      const footnoteName = footnoteDefMatch[1];
+      const footnoteText = footnoteDefMatch[2];
+      if (!footnotes[footnoteName]) {
+        footnoteCounter++;
+        footnotes[footnoteName] = { number: footnoteCounter, text: footnoteText };
+      }
+      continue; // Skip rendering footnote definitions in main content
     }
 
     // Handle blockquotes (collect consecutive blockquote lines)
@@ -279,7 +293,7 @@ function convertMarkdownToConfluence(markdown) {
 
         if (isNewAlert) {
           // End current blockquote and start fresh for the new alert
-          html += processBlockquote(blockquoteLines);
+          html += processBlockquote(blockquoteLines, footnotes);
           inBlockquote = false;
           blockquoteLines = [];
           html += '<p></p>\n';
@@ -291,7 +305,7 @@ function convertMarkdownToConfluence(markdown) {
         }
       } else {
         // End of blockquote block
-        html += processBlockquote(blockquoteLines);
+        html += processBlockquote(blockquoteLines, footnotes);
         inBlockquote = false;
         blockquoteLines = [];
         html += '<p></p>\n';
@@ -299,7 +313,7 @@ function convertMarkdownToConfluence(markdown) {
       }
     } else if (inBlockquote) {
       // Non-empty, non-blockquote line ends the blockquote
-      html += processBlockquote(blockquoteLines);
+      html += processBlockquote(blockquoteLines, footnotes);
       inBlockquote = false;
       blockquoteLines = [];
       // Process this line normally (fall through)
@@ -312,7 +326,7 @@ function convertMarkdownToConfluence(markdown) {
     }
 
     // Regular paragraphs
-    html += `<p>${processInline(line)}</p>\n`;
+    html += `<p>${processInline(line, footnotes)}</p>\n`;
   }
 
   // Close any open list
@@ -322,30 +336,54 @@ function convertMarkdownToConfluence(markdown) {
 
   // Close any open blockquote
   if (inBlockquote && blockquoteLines.length > 0) {
-    html += processBlockquote(blockquoteLines);
+    html += processBlockquote(blockquoteLines, footnotes);
   }
 
   // Close any open table
   if (inTable && tableHeaders.length > 0) {
     html += '<table><thead><tr>';
     tableHeaders.forEach(header => {
-      html += `<th>${processInline(header)}</th>`;
+      html += `<th>${processInline(header, footnotes)}</th>`;
     });
     html += '</tr></thead><tbody>';
     tableRows.forEach(row => {
       html += '<tr>';
       row.forEach(cell => {
-        html += `<td>${processInline(cell)}</td>`;
+        html += `<td>${processInline(cell, footnotes)}</td>`;
       });
       html += '</tr>';
     });
     html += '</tbody></table>\n';
   }
 
+  // Add footnotes section if there are any footnotes
+  if (Object.keys(footnotes).length > 0) {
+    html += '<hr />\n';
+    html += '<h3>Footnotes</h3>\n';
+    html += '<ol>\n';
+
+    // Sort footnotes by their number
+    const sortedFootnotes = Object.entries(footnotes).sort((a, b) => a[1].number - b[1].number);
+
+    sortedFootnotes.forEach(([name, data]) => {
+      html += `<li>${data.text}</li>\n`;
+    });
+
+    html += '</ol>\n';
+  }
+
   return html;
 }
 
-function processInline(text) {
+function processInline(text, footnotes = {}) {
+  // Footnote references (e.g., [^1] or [^longnote])
+  text = text.replace(/\[\^([^\]]+)\]/g, (match, footnoteName) => {
+    if (footnotes[footnoteName]) {
+      return `<sup>${footnotes[footnoteName].number}</sup>`;
+    }
+    return match; // Return original if footnote not found
+  });
+
   // Bold
   text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   text = text.replace(/__(.+?)__/g, '<strong>$1</strong>');
