@@ -1,7 +1,7 @@
 {
   "name": "confluence-publisher",
   "version": "1.0.0",
-  "description": "Publish GitHub markdown to Confluence",
+  "description": "Publish markdown to Confluence via GitHub Actions with zero dependencies",
   "main": "scripts/publish-to-confluence.js",
   "scripts": {
     "publish": "node scripts/publish-to-confluence.js"

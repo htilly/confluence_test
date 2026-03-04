@@ -5,14 +5,16 @@ Automatically publish GitHub-flavored markdown documents to Confluence using Git
 ## Features
 
 - 🚀 Manual GitHub Actions workflow trigger
-- 📝 Convert GitHub markdown to Confluence format
+- 📝 Convert GitHub markdown to Confluence HTML storage format
 - ✏️ Update existing pages or create new pages
 - 🔒 Secure authentication with API tokens
-- ✨ Support for all GitHub markdown features:
-  - Headers, lists, tables, code blocks
-  - Task lists, blockquotes, links, images
-  - GitHub alerts (Note, Warning, Important, etc.)
-  - Emoji, footnotes, and more
+- ✨ Support for common markdown features:
+  - Headers (H1-H6)
+  - Text formatting (bold, italic, strikethrough)
+  - Lists (ordered and unordered)
+  - Links, code blocks, blockquotes
+  - Inline code and code fences
+  - Horizontal rules
 
 ## Setup
 
@@ -130,45 +132,55 @@ node scripts/publish-to-confluence.js
 
 ## Example Markdown
 
-The [example.md](example.md) file demonstrates all supported GitHub markdown features:
+The [example.md](example.md) file demonstrates supported markdown features. Note that the converter uses a simplified HTML conversion for maximum compatibility with Confluence's Fabric editor:
 
+**Fully Supported:**
 - All heading levels (H1-H6)
-- Text formatting (bold, italic, strikethrough, code)
-- Lists (ordered, unordered, nested, task lists)
-- Links and images
-- Code blocks with syntax highlighting (JavaScript, Python, Bash, SQL, JSON)
-- Tables with alignment
+- Text formatting (bold, italic, strikethrough)
+- Inline code and code blocks
+- Lists (ordered and unordered)
+- Links
 - Blockquotes
 - Horizontal rules
-- GitHub alerts (Note, Tip, Important, Warning, Caution)
-- Emoji support
+- Paragraphs
+
+**Limited Support:**
+- Tables (basic HTML tables)
+- Images (must be publicly accessible URLs)
+- Task lists (converted to plain text with checkmarks)
+
+**Not Supported:**
+- GitHub alerts/callouts (rendered as blockquotes)
+- Emoji shortcodes (Unicode emoji work)
 - Footnotes
-- And more!
+- Advanced formatting and GitHub-specific features
 
 ## Markdown to Confluence Conversion
 
-The script converts GitHub-flavored markdown to Confluence storage format:
+The script converts markdown to Confluence HTML storage format compatible with the Fabric editor:
 
-| GitHub Markdown | Confluence Format |
-|-----------------|-------------------|
+| GitHub Markdown | Confluence HTML |
+|-----------------|-----------------|
 | Headers (`#` to `######`) | `<h1>` to `<h6>` |
-| **Bold** | `<strong>` |
-| *Italic* | `<em>` |
+| **Bold** or __Bold__ | `<strong>` |
+| *Italic* or _Italic_ | `<em>` |
 | ~~Strikethrough~~ | `<s>` |
 | `inline code` | `<code>` |
-| Code blocks | Confluence code macro |
-| Tables | Confluence table format |
-| Task lists | Confluence task format |
-| Blockquotes | `<blockquote>` |
-| GitHub alerts | Confluence info/warning/note macros |
-| Images | Confluence image macro |
+| Code blocks (```) | `<pre><code>` (HTML-escaped) |
+| Links `[text](url)` | `<a href="url">text</a>` |
+| Lists (- or 1.) | `<ul><li>` or `<ol><li>` |
+| Blockquotes (>) | `<blockquote><p>` |
+| Horizontal rules (---) | `<hr />` |
 
 ### Known Limitations
 
-- Images must be publicly accessible URLs (not local files)
-- Some GitHub-specific features (like @mentions) are converted to plain text
-- Footnotes are simplified (Confluence doesn't have native footnote support)
-- Math equations and mermaid diagrams are not automatically converted
+- **No dependencies**: Uses simple regex-based conversion for maximum compatibility
+- **Tables**: Basic HTML tables only (no alignment or advanced features)
+- **Images**: Must be publicly accessible URLs; uploaded to Confluence manually
+- **GitHub-specific features**: Alerts, task lists, mentions, footnotes not converted
+- **Code syntax highlighting**: Basic `<pre><code>` blocks (no language-specific highlighting)
+- **Nested lists**: Limited support for complex nesting
+- **Mixed formatting**: Complex inline formatting may not work perfectly
 
 ## Troubleshooting
 
@@ -231,7 +243,12 @@ on:
 
 ### Custom Markdown Conversion
 
-Edit [scripts/publish-to-confluence.js](scripts/publish-to-confluence.js) to customize the conversion logic. The script uses the `marked` library with a custom renderer for Confluence format.
+Edit [scripts/publish-to-confluence.js](scripts/publish-to-confluence.js) to customize the conversion logic. The script uses simple regex-based conversion with no external dependencies for maximum compatibility with Confluence's Fabric editor.
+
+**Key functions:**
+- `convertMarkdownToConfluence()`: Main conversion function (line-by-line processing)
+- `processInline()`: Handles inline formatting (bold, italic, links, code)
+- `escapeHtml()`: Escapes HTML in code blocks
 
 ## Contributing
 

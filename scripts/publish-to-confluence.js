@@ -1,5 +1,17 @@
 #!/usr/bin/env node
 
+/**
+ * Confluence Publisher
+ *
+ * Converts markdown to Confluence HTML storage format and publishes via REST API.
+ * Uses zero external dependencies for maximum compatibility and minimal overhead.
+ *
+ * Conversion approach:
+ * - Simple regex-based line-by-line markdown parsing
+ * - Outputs basic HTML compatible with Confluence Fabric editor
+ * - No complex AST parsing or heavy libraries needed
+ */
+
 const fs = require('fs');
 const https = require('https');
 
